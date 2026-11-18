@@ -24,6 +24,13 @@ GitHub Pages — статика, а eClass требует логина, поэт
      ```bash
      python -c "import secrets; print(secrets.token_urlsafe(18))"
      ```
+   Шаги 1–3 можно сделать и из терминала — после `pip install pynacl`:
+
+   ```bash
+   python tools/setup_github.py
+   ```
+
+   Скрипт работает через вход в GitHub, который git сохранил для `git push`. Перед каждым изменением на GitHub он спрашивает подтверждение, а ID и пароль от eClass проверяет до того, как сохранить их в секреты. Его же стоит запускать после смены пароля от eClass.
 4. Actions → «Update data and deploy» → Run workflow.
 5. Открой сайт (адрес — в Settings → Pages) и введи `DATA_PASSPHRASE`. На каждом устройстве это нужно сделать один раз: пароль запоминается в браузере, а кнопка «Забыть пароль» внизу страницы его стирает.
 
