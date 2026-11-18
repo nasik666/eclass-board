@@ -1,0 +1,67 @@
+name: Update data and deploy
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 */2 * * *" # every 2 hours (UTC), off the busy top of the hour
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+  actions: write # only for the keep-alive step below
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m unittest discover -s tests
+
+      # Fails the job (and keeps the previous deployment online) if eClass is
+      # unreachable or the login is rejected. Without secrets it writes a
+      # placeholder and the page shows setup instructions.
+      # --public: with DATA_PASSPHRASE the whole file is encrypted; without it
+      # grades and attendance are not published at all.
+      - name: Fetch eClass data
+        run: python scraper/fetch.py --public
+        env:
+          ECLASS_USERNAME: ${{ secrets.ECLASS_USERNAME }}
+          ECLASS_PASSWORD: ${{ secrets.ECLASS_PASSWORD }}
+          ECLASS_ICAL_URL: ${{ secrets.ECLASS_ICAL_URL }}
+          DATA_PASSPHRASE: ${{ secrets.DATA_PASSPHRASE }}
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+      # GitHub disables scheduled workflows after 60 days without repository
+      # activity; re-enabling through the API resets that timer.
+      - name: Keep the schedule alive
+        if: github.event_name == 'schedule'
+        continue-on-error: true
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/update.yml/enable"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
